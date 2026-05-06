@@ -189,6 +189,63 @@ app.post("/reboot", async (req, res) => {
 
 /**
  * @openapi
+ * /reboot/auto:
+ *   post:
+ *     summary: Reiniciar el router con credenciales de entorno
+ *     description: >
+ *       Igual que `POST /reboot` pero toma las credenciales de las variables de entorno
+ *       `ROUTER_USERNAME` y `ROUTER_PASSWORD`. No requiere body.
+ *       Retorna HTTP 500 si las variables no están definidas.
+ *     responses:
+ *       200:
+ *         description: Comando de reboot enviado exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Reboot command sent. The router will restart in a few seconds." }
+ *       500:
+ *         description: Variables de entorno no definidas o error al ejecutar el reboot
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+app.post("/reboot/auto", async (req, res) => {
+  const username = process.env.ROUTER_USERNAME;
+  const password = process.env.ROUTER_PASSWORD;
+
+  if (!username || !password) {
+    return res.status(500).json({
+      success: false,
+      error: "ROUTER_USERNAME and ROUTER_PASSWORD environment variables are not defined",
+    });
+  }
+
+  try {
+    const client = new SagemcomClient(username, password);
+    await client.login();
+
+    res.json({
+      success: true,
+      message: "Reboot command sent. The router will restart in a few seconds.",
+    });
+
+    await client.reboot();
+  } catch (err) {
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        error: err.message,
+      });
+    }
+  }
+});
+
+/**
+ * @openapi
  * /status:
  *   get:
  *     summary: Health check de la API
