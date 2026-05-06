@@ -1,0 +1,72 @@
+[
+  {
+    "alias": "Router - Reboot periódico (diario a las 4 AM)",
+    "description": "Reinicia el router todos los días a las 4 AM invocando el endpoint /reboot",
+    "trigger": [
+      {
+        "platform": "time",
+        "at": "04:00:00"
+      }
+    ],
+    "condition": [],
+    "action": [
+      {
+        "service": "notify.persistent_notification",
+        "data": {
+          "title": "Router",
+          "message": "Iniciando reboot periódico del router..."
+        }
+      },
+      {
+        "service": "rest_command.router_reboot"
+      }
+    ],
+    "mode": "single"
+  },
+  {
+    "alias": "Router - Reboot por pérdida de internet",
+    "description": "Detecta pérdida de conectividad y reinicia el router automáticamente. Espera 2 minutos antes de reintentar para evitar falsos positivos.",
+    "trigger": [
+      {
+        "platform": "state",
+        "entity_id": "binary_sensor.internet_connectivity",
+        "to": "off",
+        "for": {
+          "minutes": 2
+        }
+      }
+    ],
+    "condition": [
+      {
+        "condition": "state",
+        "entity_id": "binary_sensor.internet_connectivity",
+        "state": "off"
+      }
+    ],
+    "action": [
+      {
+        "service": "notify.persistent_notification",
+        "data": {
+          "title": "Router",
+          "message": "Sin internet por más de 2 minutos. Reiniciando router..."
+        }
+      },
+      {
+        "service": "rest_command.router_reboot"
+      },
+      {
+        "delay": {
+          "minutes": 3
+        }
+      },
+      {
+        "service": "notify.persistent_notification",
+        "data": {
+          "title": "Router",
+          "message": "Reboot ejecutado. Verificá la conexión."
+        }
+      }
+    ],
+    "mode": "single"
+  }
+]
