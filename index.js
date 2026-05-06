@@ -1,4 +1,6 @@
 const express = require("express");
+const swaggerUi = require("swagger-ui-express");
+const swaggerJsdoc = require("swagger-jsdoc");
 const SagemcomClient = require("./sagemcom");
 
 const app = express();
@@ -7,14 +9,80 @@ app.use(express.json());
 const ROUTER_HOST = process.env.ROUTER_HOST || "192.168.0.1";
 const PORT = process.env.PORT || 3000;
 
+// ─── Swagger / OpenAPI ────────────────────────────────────────────────────────
+
+const swaggerSpec = swaggerJsdoc({
+  definition: {
+    openapi: "3.0.0",
+    info: {
+      title: "Router API",
+      version: "1.0.0",
+      description:
+        "API REST para autenticar y reiniciar un router Sagemcom F@ST 3890 (Cablevision/Fibertel Argentina).",
+    },
+    servers: [{ url: `http://${ROUTER_HOST.includes("localhost") ? "localhost" : "192.168.0.214"}:${PORT}` }],
+    components: {
+      schemas: {
+        Credentials: {
+          type: "object",
+          required: ["username", "password"],
+          properties: {
+            username: { type: "string", example: "custadmin" },
+            password: { type: "string", example: "yourpassword" },
+          },
+        },
+        ErrorResponse: {
+          type: "object",
+          properties: {
+            success: { type: "boolean", example: false },
+            error: { type: "string", example: "username and password are required" },
+          },
+        },
+      },
+    },
+  },
+  apis: ["./index.js"],
+});
+
+app.get("/", (_req, res) => res.redirect("/docs"));
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { customSiteTitle: "Router API" }));
+app.get("/openapi.json", (_req, res) => res.json(swaggerSpec));
+
 /**
- * POST /login
- * Body: { username, password }
- * Authenticates against the Sagemcom router and returns a session token.
- *
- * The session token is a base64-encoded JSON with { username, password }
- * so subsequent requests can re-authenticate if needed.
- * (Sagemcom sessions are short-lived; we store credentials server-side for reboot.)
+ * @openapi
+ * /login:
+ *   post:
+ *     summary: Autenticar contra el router
+ *     description: Realiza login en el router Sagemcom y devuelve un token de sesión.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Credentials'
+ *     responses:
+ *       200:
+ *         description: Login exitoso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 token: { type: string, example: "eyJ1c2VybmFtZ..." }
+ *                 message: { type: string, example: "Authenticated successfully against the router" }
+ *       400:
+ *         description: Faltan credenciales
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Credenciales incorrectas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
@@ -50,9 +118,42 @@ app.post("/login", async (req, res) => {
 });
 
 /**
- * POST /reboot
- * Body: { username, password }
- * Login + reboot en una sola request.
+ * @openapi
+ * /reboot:
+ *   post:
+ *     summary: Reiniciar el router
+ *     description: >
+ *       Realiza login y envía el comando de reboot al router en una sola request.
+ *       La respuesta se envía **antes** de ejecutar el reboot para evitar perder
+ *       la conexión cuando el router se apaga.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Credentials'
+ *     responses:
+ *       200:
+ *         description: Comando de reboot enviado exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Reboot command sent. The router will restart in a few seconds." }
+ *       400:
+ *         description: Faltan credenciales
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Error al ejecutar el reboot
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 app.post("/reboot", async (req, res) => {
   const { username, password } = req.body;
@@ -87,8 +188,29 @@ app.post("/reboot", async (req, res) => {
 });
 
 /**
- * GET /status
- * Health check — verifies the API is running.
+ * @openapi
+ * /status:
+ *   get:
+ *     summary: Health check de la API
+ *     description: Verifica que la API está corriendo y muestra los endpoints disponibles.
+ *     responses:
+ *       200:
+ *         description: API operativa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: "ok" }
+ *                 router: { type: string, example: "192.168.0.1" }
+ *                 endpoints:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       method: { type: string }
+ *                       path: { type: string }
+ *                       description: { type: string }
  */
 app.get("/status", (_req, res) => {
   res.json({
