@@ -1,0 +1,8 @@
+services:
+  router-api:
+    build: .
+    container_name: router-api
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - PORT=3000
